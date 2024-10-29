@@ -47,24 +47,13 @@ struct RGBA {
     u8 a;
 };
 
-enum struct Direction : u8 {
-    North = 0,
-    Northeast = 1,
-    East = 2,
-    Southeast = 3,
-    South = 4,
-    Southwest = 5,
-    West = 6,
-    Northwest = 7
-};
-
 struct PixelParticle {
     V2 position = {};
     RGBA color = {};
     double elapsed = 0.0f;
-    double velocity = 2.0f;
+    double velocity = 1.0f;
     double moveDelta = 0.0f;
-    Direction direction = Direction::North;
+    V2 direction = {};
     bool done;
 };
 
@@ -77,10 +66,78 @@ struct ParticleEmitter {
     double particleDuration = 1.5f;
     double fade = 1.015f;
     //float emitDuration = 1.0f;
+    bool showBounds = false;
     PixelParticle *particles;
 };
 
-void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, u32 maxParticles = 100) {
+struct EditorState {
+    i32 maxParticles = 1;
+    i32 emitterWidth = 32;
+    i32 emitterHeight = 32;
+    bool showEmitterBounds = false;
+    double particleDuration = 1.5f;
+    double particleFade = 1.015f;
+    double particleVelocity = 1.0f;
+};
+
+void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state) {
+    emitter.width = state.emitterWidth;
+    emitter.height = state.emitterHeight;
+
+    emitter.position = {
+        .x = clickPosition.x - ((i32)emitter.width / 2),
+        .y = clickPosition.y - ((i32)emitter.height / 2)
+    };
+
+    emitter.maxParticles = state.maxParticles;
+    emitter.particleDuration = state.particleDuration;
+    emitter.fade = state.particleFade;
+    emitter.showBounds = state.showEmitterBounds;
+
+    // TODO: Arena allocate if this is brought into game code
+    emitter.particles = (PixelParticle *) malloc(sizeof(PixelParticle) * emitter.maxParticles);
+    for(u32 i = 0; i < emitter.maxParticles; ++i) {
+        PixelParticle particle = {};
+        particle.velocity = state.particleVelocity;
+
+        particle.position = {
+            .x = emitter.position.x - ((i32)emitter.width / 2),
+            .y = emitter.position.y - ((i32)emitter.height / 2)
+        };
+
+        switch(RandomInteger(0, 2)) {
+            case 0:
+                particle.color.r = 255;
+                particle.color.g = 150;
+                particle.color.b = 150;
+                break;
+            case 1:
+                particle.color.r = 150;
+                particle.color.g = 150;
+                particle.color.b = 255;
+                break;
+            case 2:
+                particle.color.r = 255;
+                particle.color.g = 255;
+                particle.color.b = 255;
+                break;
+        }
+        particle.color.a = 255;
+
+        particle.direction = {
+            .x = RandomInteger(-3, 3),
+            .y = RandomInteger(-3, 3)
+        };
+        particle.position = {
+            .x = RandomInteger(emitter.position.x, emitter.position.x + emitter.width),
+            .y = RandomInteger(emitter.position.y, emitter.position.y + emitter.height)
+        };
+        emitter.particles[i] = particle;
+    }
+    emitter.initialized = true;
+}
+
+/*void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, u32 maxParticles = 100) {
     emitter.position = {
         .x = clickPosition.x - ((i32)emitter.width / 2),
         .y = clickPosition.y - ((i32)emitter.height / 2)
@@ -94,13 +151,30 @@ void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, u32 maxPart
             .x = emitter.position.x - ((i32)emitter.width / 2),
             .y = emitter.position.y - ((i32)emitter.height / 2)
         };
-        particle.color = {
-            .r = 255,
-            .g = 255,
-            .b = 255,
-            .a = 255,
+
+        switch(RandomInteger(0, 2)) {
+            case 0:
+                particle.color.r = 255;
+                particle.color.g = 150;
+                particle.color.b = 150;
+                break;
+            case 1:
+                particle.color.r = 150;
+                particle.color.g = 150;
+                particle.color.b = 255;
+                break;
+            case 2:
+                particle.color.r = 255;
+                particle.color.g = 255;
+                particle.color.b = 255;
+                break;
+        }
+        particle.color.a = 255;
+
+        particle.direction = {
+            .x = RandomInteger(-3, 3),
+            .y = RandomInteger(-3, 3)
         };
-        particle.direction = (Direction)RandomInteger(0, 7);
         particle.position = {
             .x = RandomInteger(emitter.position.x, emitter.position.x + emitter.width),
             .y = RandomInteger(emitter.position.y, emitter.position.y + emitter.height)
@@ -108,7 +182,7 @@ void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, u32 maxPart
         emitter.particles[i] = particle;
     }
     emitter.initialized = true;
-}
+}*/
 
 void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter *emitter, double delta) {
     if(!emitter->initialized) {
@@ -135,36 +209,8 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter *emitter, 
             continue;
         }
 
-        switch(particle->direction) {
-            case Direction::North:
-                particle->position.y -= (i32)(1 * particle->velocity);
-                break;
-            case Direction::Northeast:
-                particle->position.y -= (i32)(1 * particle->velocity);
-                particle->position.x += (i32)(1 * particle->velocity);
-                break;
-            case Direction::East:
-                particle->position.x += (i32)(1 * particle->velocity);
-                break;
-            case Direction::Southeast:
-                particle->position.y += (i32)(1 * particle->velocity);
-                particle->position.x += (i32)(1 * particle->velocity);
-                break;
-            case Direction::South:
-                particle->position.y += (i32)(1 * particle->velocity);
-                break;
-            case Direction::Southwest:
-                particle->position.y += (i32)(1 * particle->velocity);
-                particle->position.x -= (i32)(1 * particle->velocity);
-                break;
-            case Direction::West:
-                particle->position.x -= (i32)(1 * particle->velocity);
-                break;
-            case Direction::Northwest:
-                particle->position.y -= (i32)(1 * particle->velocity);
-                particle->position.x -= (i32)(1 * particle->velocity);
-                break;
-        }
+        particle->position.x += (i32)(particle->direction.x * particle->velocity);
+        particle->position.y += (i32)(particle->direction.y * particle->velocity);
 
         particle->color.a = (u8)(particle->color.a / emitter->fade);
 
@@ -177,14 +223,15 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter *emitter, 
         return;
     }
 
-    // TODO: This is only for testing to see the emitter position and size
-    SDL_Rect rect = {};
-    rect.h = emitter->height;
-    rect.w = emitter->width;
-    rect.x = emitter->position.x;
-    rect.y = emitter->position.y;
-    SDL_SetRenderDrawColor(renderer, 100, 200, 255, 255);
-    SDL_RenderDrawRect(renderer, &rect);
+    if(emitter->showBounds) {
+        SDL_Rect rect = {};
+        rect.h = emitter->height;
+        rect.w = emitter->width;
+        rect.x = emitter->position.x;
+        rect.y = emitter->position.y;
+        SDL_SetRenderDrawColor(renderer, 100, 200, 255, 255);
+        SDL_RenderDrawRect(renderer, &rect);
+    }
 }
 
 int main() {
@@ -225,8 +272,8 @@ int main() {
     ImGui_ImplSDLRenderer2_Init(renderer);
 
     // Editor state
-    float someValue = 0.0f;
     ParticleEmitter emitter = {};
+    EditorState state = {};
     V2 mousePosition = {};
 
     // Set Windows thread resolution so we can maybe sleep in loop
@@ -265,11 +312,13 @@ int main() {
                event.window.windowID == SDL_GetWindowID(window)) {
                 done = true;
             }
-            if(event.type == SDL_MOUSEBUTTONDOWN) {
-                SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
-                if(!emitter.initialized) {
-                    InitParticleEmitter(emitter, mousePosition, 100);
-                    printf("Particle emitter created\n");
+            if(!io.WantCaptureMouse) {
+                if(event.type == SDL_MOUSEBUTTONDOWN) {
+                    SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
+                    if(!emitter.initialized) {
+                        InitParticleEmitter(emitter, mousePosition, state);
+                        printf("Particle emitter created\n");
+                    }
                 }
             }
         }
@@ -284,10 +333,17 @@ int main() {
         ImGui::NewFrame();
 
         // Set up window
-        ImGui::Begin("Particle Settings");
-        ImGui::SliderFloat("Some Value", &someValue, 0.0f, 1.0f);
-        // This was useful to compare my loop's timing to what IMGUI is doing
-        //ImGui::Text("IMGUI averages %.3f ms/f (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        ImGui::Begin("Particle Emitter Settings");
+        ImGui::SliderInt("Max Particles", &state.maxParticles, 1, 5000);
+        ImGui::SliderInt("Emitter Width", &state.emitterWidth, 1, 250);
+        ImGui::SliderInt("Emitter Height", &state.emitterHeight, 1, 250);
+        ImGui::Checkbox("Show Emitter", &state.showEmitterBounds);
+        ImGui::InputDouble("Particle Duration", &state.particleDuration, 0.1f, 10.0f);
+        ImGui::InputDouble("Particle Fade", &state.particleFade, 1.0f, 2.0f);
+        ImGui::InputDouble("Particle Velocity", &state.particleVelocity, 1.0f, 20.0f);
+        ImGui::NewLine();
+        ImGui::Separator();
+        ImGui::NewLine();
         ImGui::Text("Loop averages %.02f ms/f (%.02f FPS)", msPerFrame, fps);
         ImGui::End();
 
