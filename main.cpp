@@ -62,7 +62,7 @@ struct PixelParticle {
     V2 position = {};
     RGBA color = {};
     double elapsed = 0.0f;
-    double velocity = 0.0001f;
+    double velocity = 2.0f;
     double moveDelta = 0.0f;
     Direction direction = Direction::North;
     bool done;
@@ -74,7 +74,8 @@ struct ParticleEmitter {
     u32 width = 32;
     u32 height = 32;
     V2 position = {};
-    double particleDuration = 2.0f;
+    double particleDuration = 1.5f;
+    double fade = 1.015f;
     //float emitDuration = 1.0f;
     PixelParticle *particles;
 };
@@ -125,6 +126,7 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter *emitter, 
         // If we get here, we're not done with all particles
         allParticlesDone = false;
 
+        // Conversion of milliseconds into seconds
         particle->elapsed += delta * 0.001f;
         particle->moveDelta += delta * 0.001f;
 
@@ -133,40 +135,38 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter *emitter, 
             continue;
         }
 
-        if(particle->moveDelta >= particle->velocity) {
-            particle->moveDelta = 0.0f;
-            // TODO: Move correct Direction
-            switch(particle->direction) {
-                case Direction::North:
-                    --particle->position.y;
-                    break;
-                case Direction::Northeast:
-                    --particle->position.y;
-                    ++particle->position.x;
-                    break;
-                case Direction::East:
-                    ++particle->position.x;
-                    break;
-                case Direction::Southeast:
-                    ++particle->position.y;
-                    ++particle->position.x;
-                    break;
-                case Direction::South:
-                    ++particle->position.y;
-                    break;
-                case Direction::Southwest:
-                    ++particle->position.y;
-                    --particle->position.x;
-                    break;
-                case Direction::West:
-                    --particle->position.x;
-                    break;
-                case Direction::Northwest:
-                    --particle->position.y;
-                    --particle->position.x;
-                    break;
-            }
+        switch(particle->direction) {
+            case Direction::North:
+                particle->position.y -= (i32)(1 * particle->velocity);
+                break;
+            case Direction::Northeast:
+                particle->position.y -= (i32)(1 * particle->velocity);
+                particle->position.x += (i32)(1 * particle->velocity);
+                break;
+            case Direction::East:
+                particle->position.x += (i32)(1 * particle->velocity);
+                break;
+            case Direction::Southeast:
+                particle->position.y += (i32)(1 * particle->velocity);
+                particle->position.x += (i32)(1 * particle->velocity);
+                break;
+            case Direction::South:
+                particle->position.y += (i32)(1 * particle->velocity);
+                break;
+            case Direction::Southwest:
+                particle->position.y += (i32)(1 * particle->velocity);
+                particle->position.x -= (i32)(1 * particle->velocity);
+                break;
+            case Direction::West:
+                particle->position.x -= (i32)(1 * particle->velocity);
+                break;
+            case Direction::Northwest:
+                particle->position.y -= (i32)(1 * particle->velocity);
+                particle->position.x -= (i32)(1 * particle->velocity);
+                break;
         }
+
+        particle->color.a = (u8)(particle->color.a / emitter->fade);
 
         SDL_SetRenderDrawColor(renderer, particle->color.r, particle->color.g, particle->color.b, particle->color.a);
         SDL_RenderDrawPoint(renderer, particle->position.x, particle->position.y);
@@ -207,6 +207,9 @@ int main() {
         SDL_Log("Error creating SDL_Renderer!");
         return -1;
     }
+    if(SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) == 0) {
+        printf(SDL_GetError());
+    }
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -231,6 +234,9 @@ int main() {
     const bool fixFramerate = (timeBeginPeriod(desiredResolution) == TIMERR_NOERROR);
     const u8 targetFramerate = 60;
     const double targetMsForFrame = (1.0 / targetFramerate) * 1000;
+    // These control how often we should refresh the FPS display
+    const u16 refreshMs = 100;
+    u16 refreshCounter = 0;
 
     LARGE_INTEGER performanceFrequencyQuery;
     QueryPerformanceFrequency(&performanceFrequencyQuery);
@@ -280,8 +286,9 @@ int main() {
         // Set up window
         ImGui::Begin("Particle Settings");
         ImGui::SliderFloat("Some Value", &someValue, 0.0f, 1.0f);
-        ImGui::Text("IMGUI averages %.3f ms/f (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-        ImGui::Text("Loop averages %.02f ms/f (%.02f FPS", msPerFrame, fps);
+        // This was useful to compare my loop's timing to what IMGUI is doing
+        //ImGui::Text("IMGUI averages %.3f ms/f (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        ImGui::Text("Loop averages %.02f ms/f (%.02f FPS)", msPerFrame, fps);
         ImGui::End();
 
         // Rendering
@@ -315,7 +322,11 @@ int main() {
         elapsedCount = endCount.QuadPart - lastCount.QuadPart;
         elapsedCpuCycles = endCpuCycles - lastCpuCycles;
         msPerFrame = ((1000.0f * (double) elapsedCount) / (double) frequency);
-        fps = ((double) frequency / (double) elapsedCount);
+        refreshCounter += (u16)msPerFrame;
+        if(refreshCounter >= refreshMs) {
+            fps = ((double) frequency / (double) elapsedCount);
+            refreshCounter = 0;
+        }
         lastCount = endCount;
         lastCpuCycles = endCpuCycles;
     }
