@@ -54,7 +54,7 @@ struct PixelParticle {
     double velocity = 1.0f;
     double moveDelta = 0.0f;
     V2 direction = {};
-    bool done;
+    bool inUse = false;
 };
 
 struct ParticleEmitter {
@@ -64,8 +64,12 @@ struct ParticleEmitter {
     u32 height = 32;
     V2 position = {};
     double particleDuration = 1.5f;
+    double particleVelocity = 1.0f;
     double fade = 1.015f;
-    //float emitDuration = 1.0f;
+    double emitDuration = 1.0f;
+    double emitDurationCounter = 0.0f;
+    double emitRate = 0.05f;
+    double emitRateCounter = -1;
     bool showBounds = false;
     PixelParticle *particles;
 };
@@ -74,13 +78,60 @@ struct EditorState {
     i32 maxParticles = 1;
     i32 emitterWidth = 32;
     i32 emitterHeight = 32;
+    double emitDuration = 1.0f;
+    double emitRate = 0.05f;
     bool showEmitterBounds = false;
     double particleDuration = 1.5f;
     double particleFade = 1.015f;
     double particleVelocity = 1.0f;
 };
 
+void InitParticle(ParticleEmitter &emitter, PixelParticle *particle, bool inUse) {
+    // Emit entire particle collection at once
+    if(emitter.emitRate == 0.0f || inUse) {
+        particle->inUse = true;
+    } else {
+        particle->inUse = false;
+    }
+    particle->velocity = emitter.particleVelocity;
+    particle->elapsed = 0;
+
+    particle->position = {
+        .x = emitter.position.x - ((i32)emitter.width / 2),
+        .y = emitter.position.y - ((i32)emitter.height / 2)
+    };
+
+    switch(RandomInteger(0, 2)) {
+        case 0:
+            particle->color.r = 255;
+            particle->color.g = 150;
+            particle->color.b = 150;
+            break;
+        case 1:
+            particle->color.r = 150;
+            particle->color.g = 150;
+            particle->color.b = 255;
+            break;
+        case 2:
+            particle->color.r = 255;
+            particle->color.g = 255;
+            particle->color.b = 255;
+            break;
+    }
+    particle->color.a = 255;
+
+    particle->direction = {
+        .x = RandomInteger(-10, 10),
+        .y = RandomInteger(-10, 10)
+    };
+    particle->position = {
+        .x = RandomInteger(emitter.position.x, emitter.position.x + emitter.width),
+        .y = RandomInteger(emitter.position.y, emitter.position.y + emitter.height)
+    };
+}
+
 void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state) {
+    emitter = {};
     emitter.width = state.emitterWidth;
     emitter.height = state.emitterHeight;
 
@@ -91,109 +142,49 @@ void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState
 
     emitter.maxParticles = state.maxParticles;
     emitter.particleDuration = state.particleDuration;
+    emitter.particleVelocity = state.particleVelocity;
     emitter.fade = state.particleFade;
     emitter.showBounds = state.showEmitterBounds;
+    emitter.emitRate = state.emitRate;
+    emitter.emitDuration = state.emitDuration;
 
     // TODO: Arena allocate if this is brought into game code
     emitter.particles = (PixelParticle *) malloc(sizeof(PixelParticle) * emitter.maxParticles);
     for(u32 i = 0; i < emitter.maxParticles; ++i) {
-        PixelParticle particle = {};
-        particle.velocity = state.particleVelocity;
-
-        particle.position = {
-            .x = emitter.position.x - ((i32)emitter.width / 2),
-            .y = emitter.position.y - ((i32)emitter.height / 2)
-        };
-
-        switch(RandomInteger(0, 2)) {
-            case 0:
-                particle.color.r = 255;
-                particle.color.g = 150;
-                particle.color.b = 150;
-                break;
-            case 1:
-                particle.color.r = 150;
-                particle.color.g = 150;
-                particle.color.b = 255;
-                break;
-            case 2:
-                particle.color.r = 255;
-                particle.color.g = 255;
-                particle.color.b = 255;
-                break;
-        }
-        particle.color.a = 255;
-
-        particle.direction = {
-            .x = RandomInteger(-3, 3),
-            .y = RandomInteger(-3, 3)
-        };
-        particle.position = {
-            .x = RandomInteger(emitter.position.x, emitter.position.x + emitter.width),
-            .y = RandomInteger(emitter.position.y, emitter.position.y + emitter.height)
-        };
-        emitter.particles[i] = particle;
+        PixelParticle *particle = &emitter.particles[i];
+        InitParticle(emitter, particle, false);
     }
     emitter.initialized = true;
 }
 
-/*void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, u32 maxParticles = 100) {
-    emitter.position = {
-        .x = clickPosition.x - ((i32)emitter.width / 2),
-        .y = clickPosition.y - ((i32)emitter.height / 2)
-    };
-    emitter.maxParticles = maxParticles;
-    // TODO: Arena allocate if this is brought into game code
-    emitter.particles = (PixelParticle *) malloc(sizeof(PixelParticle) * emitter.maxParticles);
-    for(u32 i = 0; i < emitter.maxParticles; ++i) {
-        PixelParticle particle = {};
-        particle.position = {
-            .x = emitter.position.x - ((i32)emitter.width / 2),
-            .y = emitter.position.y - ((i32)emitter.height / 2)
-        };
-
-        switch(RandomInteger(0, 2)) {
-            case 0:
-                particle.color.r = 255;
-                particle.color.g = 150;
-                particle.color.b = 150;
-                break;
-            case 1:
-                particle.color.r = 150;
-                particle.color.g = 150;
-                particle.color.b = 255;
-                break;
-            case 2:
-                particle.color.r = 255;
-                particle.color.g = 255;
-                particle.color.b = 255;
-                break;
-        }
-        particle.color.a = 255;
-
-        particle.direction = {
-            .x = RandomInteger(-3, 3),
-            .y = RandomInteger(-3, 3)
-        };
-        particle.position = {
-            .x = RandomInteger(emitter.position.x, emitter.position.x + emitter.width),
-            .y = RandomInteger(emitter.position.y, emitter.position.y + emitter.height)
-        };
-        emitter.particles[i] = particle;
-    }
-    emitter.initialized = true;
-}*/
-
-void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter *emitter, double delta) {
-    if(!emitter->initialized) {
+void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, double delta) {
+    if(!emitter.initialized) {
         return;
     }
 
-    bool allParticlesDone = true;
-    for(u32 i = 0; i < emitter->maxParticles; ++i) {
-        PixelParticle *particle = &emitter->particles[i];
+    if(emitter.emitDurationCounter <= emitter.emitDuration) {
+        if(emitter.emitRateCounter >= emitter.emitRate || emitter.emitRateCounter == -1) {
+            for(u32 i = 0; i < emitter.maxParticles; ++i) {
+                PixelParticle *particle = &emitter.particles[i];
+                if(!particle->inUse) {
+                    InitParticle(emitter, particle, true);
+                    break;
+                }
+            }
 
-        if(particle->done) {
+            emitter.emitRateCounter = 0;
+        } else {
+            emitter.emitRateCounter += delta * 0.001f;
+        }
+
+        emitter.emitDurationCounter += delta * 0.001f;
+    }
+
+    bool allParticlesDone = true;
+    for(u32 i = 0; i < emitter.maxParticles; ++i) {
+        PixelParticle *particle = &emitter.particles[i];
+
+        if(!particle->inUse) {
             continue;
         }
 
@@ -204,31 +195,33 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter *emitter, 
         particle->elapsed += delta * 0.001f;
         particle->moveDelta += delta * 0.001f;
 
-        if(particle->elapsed >= emitter->particleDuration) {
-            particle->done = true;
+        if(particle->elapsed >= emitter.particleDuration) {
+            particle->inUse = false;
             continue;
         }
 
         particle->position.x += (i32)(particle->direction.x * particle->velocity);
         particle->position.y += (i32)(particle->direction.y * particle->velocity);
 
-        particle->color.a = (u8)(particle->color.a / emitter->fade);
+        particle->color.a = (u8)(particle->color.a / emitter.fade);
 
         SDL_SetRenderDrawColor(renderer, particle->color.r, particle->color.g, particle->color.b, particle->color.a);
         SDL_RenderDrawPoint(renderer, particle->position.x, particle->position.y);
     }
 
     if(allParticlesDone) {
-        emitter->initialized = false;
+        printf("Deallocate\n");
+        emitter.initialized = false;
+        free(emitter.particles);
         return;
     }
 
-    if(emitter->showBounds) {
+    if(emitter.showBounds) {
         SDL_Rect rect = {};
-        rect.h = emitter->height;
-        rect.w = emitter->width;
-        rect.x = emitter->position.x;
-        rect.y = emitter->position.y;
+        rect.h = emitter.height;
+        rect.w = emitter.width;
+        rect.x = emitter.position.x;
+        rect.y = emitter.position.y;
         SDL_SetRenderDrawColor(renderer, 100, 200, 255, 255);
         SDL_RenderDrawRect(renderer, &rect);
     }
@@ -337,10 +330,13 @@ int main() {
         ImGui::SliderInt("Max Particles", &state.maxParticles, 1, 5000);
         ImGui::SliderInt("Emitter Width", &state.emitterWidth, 1, 250);
         ImGui::SliderInt("Emitter Height", &state.emitterHeight, 1, 250);
+        ImGui::InputDouble("Emit Rate", &state.emitRate, 0.001f, 0.1f);
+        ImGui::Text("(0 Rate will emit all particles at once)");
+        ImGui::InputDouble("Emit Duration", &state.emitDuration, 1.0f, 1.0f);
         ImGui::Checkbox("Show Emitter", &state.showEmitterBounds);
-        ImGui::InputDouble("Particle Duration", &state.particleDuration, 0.1f, 10.0f);
-        ImGui::InputDouble("Particle Fade", &state.particleFade, 1.0f, 2.0f);
-        ImGui::InputDouble("Particle Velocity", &state.particleVelocity, 1.0f, 20.0f);
+        ImGui::InputDouble("Particle Duration", &state.particleDuration, 0.1f, 0.1f);
+        ImGui::InputDouble("Particle Fade", &state.particleFade, 1.0f, 0.5f);
+        ImGui::InputDouble("Particle Velocity", &state.particleVelocity, 1.0f, 1.0f);
         ImGui::NewLine();
         ImGui::Separator();
         ImGui::NewLine();
@@ -354,7 +350,7 @@ int main() {
         SDL_RenderClear(renderer);
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
 
-        UpdateAndRenderParticles(renderer, &emitter, msPerFrame);
+        UpdateAndRenderParticles(renderer, emitter, msPerFrame);
 
         SDL_RenderPresent(renderer);
 
