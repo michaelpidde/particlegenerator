@@ -6,9 +6,10 @@
 #define SDL_MAIN_HANDLED
 
 #include "libs/SDL2-2.30.8/include/SDL.h"
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "libs/imgui/imgui.h"
-#include "libs/imgui/backends/imgui_impl_sdl2.h"
-#include "libs/imgui/backends/imgui_impl_sdlrenderer2.h"
+
+#include "monobuild.cpp"
 
 #define u64 uint64_t
 #define u32 uint32_t
@@ -70,6 +71,7 @@ struct ParticleEmitter {
     double emitDurationCounter = 0.0f;
     double emitRate = 0.05f;
     double emitRateCounter = -1;
+    i32 emitMagnitude = 1;
     bool showBounds = false;
     PixelParticle *particles;
 };
@@ -84,6 +86,7 @@ struct EditorState {
     double particleDuration = 1.5f;
     double particleFade = 1.015f;
     double particleVelocity = 1.0f;
+    i32 emitMagnitude = 1;
 };
 
 void InitParticle(ParticleEmitter &emitter, PixelParticle *particle, bool inUse) {
@@ -147,6 +150,7 @@ void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState
     emitter.showBounds = state.showEmitterBounds;
     emitter.emitRate = state.emitRate;
     emitter.emitDuration = state.emitDuration;
+    emitter.emitMagnitude = state.emitMagnitude;
 
     // TODO: Arena allocate if this is brought into game code
     emitter.particles = (PixelParticle *) malloc(sizeof(PixelParticle) * emitter.maxParticles);
@@ -164,11 +168,16 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, 
 
     if(emitter.emitDurationCounter <= emitter.emitDuration) {
         if(emitter.emitRateCounter >= emitter.emitRate || emitter.emitRateCounter == -1) {
+            i32 magnitudeCount = 0;
             for(u32 i = 0; i < emitter.maxParticles; ++i) {
                 PixelParticle *particle = &emitter.particles[i];
                 if(!particle->inUse) {
                     InitParticle(emitter, particle, true);
-                    break;
+                    if(emitter.emitMagnitude > 1 && magnitudeCount < emitter.emitMagnitude) {
+                        ++magnitudeCount;
+                    } else {
+                        break;
+                    }
                 }
             }
 
@@ -331,6 +340,7 @@ int main() {
         ImGui::SliderInt("Emitter Width", &state.emitterWidth, 1, 250);
         ImGui::SliderInt("Emitter Height", &state.emitterHeight, 1, 250);
         ImGui::InputDouble("Emit Rate", &state.emitRate, 0.001f, 0.1f);
+        ImGui::SliderInt("Emit Magnitude", &state.emitMagnitude, 1, 100);
         ImGui::Text("(0 Rate will emit all particles at once)");
         ImGui::InputDouble("Emit Duration", &state.emitDuration, 1.0f, 1.0f);
         ImGui::Checkbox("Show Emitter", &state.showEmitterBounds);

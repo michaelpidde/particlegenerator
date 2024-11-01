@@ -20,8 +20,7 @@ set CompilerOutputs=-Fmparticlegenerator.map -Feparticlegenerator.exe
 
 REM del /q *.pdb 2> NUL
 
-set Sources=%BASE%\main.cpp %IMGUI%\backends\imgui_impl_sdl2.cpp %IMGUI%\backends\imgui_impl_sdlrenderer2.cpp ^
-    %IMGUI%\imgui.cpp %IMGUI%\imgui_draw.cpp %IMGUI%\imgui_widgets.cpp %IMGUI%\imgui_tables.cpp
+set Sources=%BASE%\main.cpp
 set Includes=-I %BASE%\libs\SDL2-2.30.8\include -I %BASE%\libs\imgui
 set Libs=-LIBPATH:%BASE%\libs\SDL2-2.30.8\lib\x64 SDL2.lib SDL2main.lib winmm.lib
 
