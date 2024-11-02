@@ -8,6 +8,7 @@ mkdir %BASE%\build
 pushd %BASE%\build
 
 xcopy /Y /D %BASE%\libs\SDL2-2.30.8\lib\x64\SDL2.dll
+xcopy /Y /D %BASE%\sprite sprite\
 
 REM -std:c++20 Use C++ 2020 standard
 REM -MD link with MSVCRT.LIB (Microsoft C and C++ (MSVC) runtime libraries)

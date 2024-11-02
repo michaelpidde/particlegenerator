@@ -58,6 +58,17 @@ struct PixelParticle {
     bool inUse = false;
 };
 
+struct SpriteParticle {
+    V2 position = {};
+    i32 width = 32;
+    i32 height = 32;
+    double elapsed = 0.0f;
+    double velocity = 1.0f;
+    double moveDelta = 0.0f;
+    V2 direction = {};
+    bool inUse = false;
+};
+
 struct ParticleEmitter {
     bool initialized = false;
     u32 maxParticles = 100;
@@ -73,7 +84,11 @@ struct ParticleEmitter {
     double emitRateCounter = -1;
     i32 emitMagnitude = 1;
     bool showBounds = false;
-    PixelParticle *particles;
+    i32 particleType = -1;
+    union {
+        PixelParticle *pixels;
+        SpriteParticle *sprites;
+    } particles;
 };
 
 struct EditorState {
@@ -89,7 +104,7 @@ struct EditorState {
     i32 emitMagnitude = 1;
 };
 
-void InitParticle(ParticleEmitter &emitter, PixelParticle *particle, bool inUse) {
+void InitPixelParticle(ParticleEmitter &emitter, PixelParticle *particle, bool inUse) {
     // Emit entire particle collection at once
     if(emitter.emitRate == 0.0f || inUse) {
         particle->inUse = true;
@@ -133,7 +148,7 @@ void InitParticle(ParticleEmitter &emitter, PixelParticle *particle, bool inUse)
     };
 }
 
-void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state) {
+void InitPixelEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state) {
     emitter = {};
     emitter.width = state.emitterWidth;
     emitter.height = state.emitterHeight;
@@ -153,15 +168,15 @@ void InitParticleEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState
     emitter.emitMagnitude = state.emitMagnitude;
 
     // TODO: Arena allocate if this is brought into game code
-    emitter.particles = (PixelParticle *) malloc(sizeof(PixelParticle) * emitter.maxParticles);
+    emitter.particles.pixels = (PixelParticle *) malloc(sizeof(PixelParticle) * emitter.maxParticles);
     for(u32 i = 0; i < emitter.maxParticles; ++i) {
-        PixelParticle *particle = &emitter.particles[i];
-        InitParticle(emitter, particle, false);
+        PixelParticle *particle = &emitter.particles.pixels[i];
+        InitPixelParticle(emitter, particle, false);
     }
     emitter.initialized = true;
 }
 
-void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, double delta) {
+void UpdateAndRenderPixelParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, double delta) {
     if(!emitter.initialized) {
         return;
     }
@@ -170,9 +185,9 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, 
         if(emitter.emitRateCounter >= emitter.emitRate || emitter.emitRateCounter == -1) {
             i32 magnitudeCount = 0;
             for(u32 i = 0; i < emitter.maxParticles; ++i) {
-                PixelParticle *particle = &emitter.particles[i];
+                PixelParticle *particle = &emitter.particles.pixels[i];
                 if(!particle->inUse) {
-                    InitParticle(emitter, particle, true);
+                    InitPixelParticle(emitter, particle, true);
                     if(emitter.emitMagnitude > 1 && magnitudeCount < emitter.emitMagnitude) {
                         ++magnitudeCount;
                     } else {
@@ -191,7 +206,7 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, 
 
     bool allParticlesDone = true;
     for(u32 i = 0; i < emitter.maxParticles; ++i) {
-        PixelParticle *particle = &emitter.particles[i];
+        PixelParticle *particle = &emitter.particles.pixels[i];
 
         if(!particle->inUse) {
             continue;
@@ -221,7 +236,7 @@ void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, 
     if(allParticlesDone) {
         printf("Deallocate\n");
         emitter.initialized = false;
-        free(emitter.particles);
+        free(emitter.particles.pixels);
         return;
     }
 
@@ -318,8 +333,8 @@ int main() {
                 if(event.type == SDL_MOUSEBUTTONDOWN) {
                     SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
                     if(!emitter.initialized) {
-                        InitParticleEmitter(emitter, mousePosition, state);
-                        printf("Particle emitter created\n");
+                        InitPixelEmitter(emitter, mousePosition, state);
+                        printf("Pixel emitter created\n");
                     }
                 }
             }
@@ -360,7 +375,7 @@ int main() {
         SDL_RenderClear(renderer);
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
 
-        UpdateAndRenderParticles(renderer, emitter, msPerFrame);
+        UpdateAndRenderPixelParticles(renderer, emitter, msPerFrame);
 
         SDL_RenderPresent(renderer);
 
