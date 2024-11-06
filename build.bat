@@ -17,16 +17,25 @@ REM -W4 Turn on warning level 4
 REM -WX Treat warnings as errors
 REM -EHa- Turn off C++ exceptions
 REM -Zi Output debug info
-set CompilerFlags=-nologo -std:c++20 -MD -W4 -WX -EHa- -Zi
+REM -favor select processor to optimize for
+REM -MP[n] use up to 'n' processes for compilation. If you omit the processMax argument, the compiler retrieves the number of effective processors on your computer from the operating system, and creates a process for each processor.
+set CompilerFlags=-nologo -std:c++20 -MD -W4 -WX -EHa- -Zi -favor:INTEL64 -MP
+set MyFlags=-DFIX_FRAMERATE
 set CompilerOutputs=-Fmparticlegenerator.map -Feparticlegenerator.exe
 
 REM del /q *.pdb 2> NUL
 
-set Sources=%BASE%\main.cpp
+set Sources=%BASE%\main.cpp ^
+    %BASE%\libs\imgui\backends\imgui_impl_sdl2.cpp ^
+    %BASE%\libs\imgui\backends\imgui_impl_sdlrenderer2.cpp ^
+    %BASE%\libs\imgui\imgui.cpp ^
+    %BASE%\libs\imgui\imgui_draw.cpp ^
+    %BASE%\libs\imgui\imgui_widgets.cpp ^
+    %BASE%\libs\imgui\imgui_tables.cpp
 set Includes=-I %BASE%\libs\SDL2-2.30.8\include -I %BASE%\libs\SDL2_image-2.8.2\include -I %BASE%\libs\imgui
 set Libs=-LIBPATH:%BASE%\libs\SDL2-2.30.8\lib\x64 -LIBPATH:%BASE%\libs\SDL2_image-2.8.2\lib\x64 SDL2.lib SDL2main.lib SDL2_image.lib winmm.lib
 
-cl %CompilerFlags% %CompilerOutputs% %Sources% %Includes% ^
+cl %CompilerFlags% %CompilerOutputs% %Sources% %Includes% %MyFlags% ^
 -link -subsystem:console -PDB:particlegenerator%random%.pdb %Libs%
 
 

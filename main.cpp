@@ -8,10 +8,12 @@
 
 #include "libs/SDL2-2.30.8/include/SDL.h"
 #include "libs/SDL2_image-2.8.2/include/SDL_image.h"
-#define IMGUI_DEFINE_MATH_OPERATORS
-#include "libs/imgui/imgui.h"
+#include "libs/imgui/backends/imgui_impl_sdl2.h"
+#include "libs/imgui/backends/imgui_impl_sdlrenderer2.h"
 
-#include "monobuild.cpp"
+#define IMGUI_DEFINE_MATH_OPERATORS
+
+#include "libs/imgui/imgui.h"
 
 #define u64 uint64_t
 #define u32 uint32_t
@@ -68,6 +70,11 @@ struct SpriteParticle {
     u8 textureAlpha = 255;
     double elapsed = 0.0f;
     double velocity = 1.0f;
+    double angle = 0.0f;
+    double rotationRate = 0.0f;
+    i32 rotationMagnitude = 0;
+    double rotationCounter = 0.0f;
+    SDL_Point rotationCenter = {};
     double moveDelta = 0.0f;
     V2 direction = {};
     bool inUse = false;
@@ -85,7 +92,9 @@ struct ParticleEmitter {
     V2 position = {};
     double particleDuration = 1.5f;
     double particleVelocity = 1.0f;
-    double fade = 1.015f;
+    double particleFade = 1.015f;
+    double particleRotationRate = 0.0f;
+    i32 particleRotationMagnitude = 0;
     double emitDuration = 1.0f;
     double emitDurationCounter = 0.0f;
     double emitRate = 0.05f;
@@ -97,6 +106,7 @@ struct ParticleEmitter {
         PixelParticle *pixels;
         SpriteParticle *sprites;
     } particles;
+    bool clearScreen = true;
 };
 
 struct EditorState {
@@ -111,9 +121,13 @@ struct EditorState {
     double particleVelocity = 1.0f;
     i32 emitMagnitude = 1;
     i32 particleType = 0;
+    double particleRotationRate = 0.0f;
+    i32 particleRotationMagnitude = 0;
+    bool clearScreen = true;
 };
 
-void InitSpriteParticle(ParticleEmitter &emitter, SpriteParticle *particle, SDL_Texture *texture, i32 width, i32 height, bool inUse) {
+void InitSpriteParticle(ParticleEmitter &emitter, SpriteParticle *particle, SDL_Texture *texture, i32 width, i32 height,
+                        bool inUse) {
     emitter.particleType = ParticleType::Sprite;
 
     // Emit entire particle collection at once
@@ -123,12 +137,19 @@ void InitSpriteParticle(ParticleEmitter &emitter, SpriteParticle *particle, SDL_
         particle->inUse = false;
     }
     particle->velocity = emitter.particleVelocity;
-    particle->elapsed = 0;
+    particle->elapsed = 0.0f;
+    particle->rotationRate = emitter.particleRotationRate;
+    particle->rotationMagnitude = emitter.particleRotationMagnitude;
+    particle->rotationCounter = 0.0f;
+    particle->angle = 0.0f;
 
     particle->texture = texture;
     particle->textureAlpha = 255;
     particle->width = width;
     particle->height = height;
+
+    particle->rotationCenter.x = (i32)(particle->width / 2);
+    particle->rotationCenter.y = (i32)(particle->height / 2);
 
     particle->direction = {
         .x = RandomInteger(-10, 10),
@@ -187,19 +208,22 @@ void BaseEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state)
     emitter.height = state.emitterHeight;
 
     emitter.position = {
-        .x = clickPosition.x - ((i32)emitter.width / 2),
-        .y = clickPosition.y - ((i32)emitter.height / 2)
+        .x = clickPosition.x - ((i32) emitter.width / 2),
+        .y = clickPosition.y - ((i32) emitter.height / 2)
     };
 
     emitter.maxParticles = state.maxParticles;
     emitter.particleType = state.particleType;
     emitter.particleDuration = state.particleDuration;
     emitter.particleVelocity = state.particleVelocity;
-    emitter.fade = state.particleFade;
+    emitter.particleFade = state.particleFade;
     emitter.showBounds = state.showEmitterBounds;
     emitter.emitRate = state.emitRate;
     emitter.emitDuration = state.emitDuration;
     emitter.emitMagnitude = state.emitMagnitude;
+    emitter.particleRotationRate = state.particleRotationRate;
+    emitter.particleRotationMagnitude = state.particleRotationMagnitude;
+    emitter.clearScreen = state.clearScreen;
 }
 
 void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state) {
@@ -214,7 +238,8 @@ void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state)
     emitter.initialized = true;
 }
 
-void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state, SDL_Texture *texture, i32 width, i32 height) {
+void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state, SDL_Texture *texture, i32 width,
+                 i32 height) {
     BaseEmitter(emitter, clickPosition, state);
 
     emitter.particles.sprites = (SpriteParticle *) malloc(sizeof(SpriteParticle) * emitter.maxParticles);
@@ -266,17 +291,21 @@ void UpdateAndRenderPixelParticles(SDL_Renderer *renderer, ParticleEmitter &emit
 
         // Conversion of milliseconds into seconds
         particle->elapsed += delta * 0.001f;
-        particle->moveDelta += delta * 0.001f;
+        particle->moveDelta += delta;
 
         if(particle->elapsed >= emitter.particleDuration) {
             particle->inUse = false;
             continue;
         }
 
-        particle->position.x += (i32)(particle->direction.x * particle->velocity);
-        particle->position.y += (i32)(particle->direction.y * particle->velocity);
+        if(particle->moveDelta >= particle->velocity) {
+            particle->position.x += (i32)(particle->direction.x * particle->velocity);
+            particle->position.y += (i32)(particle->direction.y * particle->velocity);
+            particle->moveDelta = 0;
+        }
 
-        particle->color.a = (u8)(particle->color.a / emitter.fade);
+        // TODO: This probably needs to be wrapped in a counter
+        particle->color.a = (u8)(particle->color.a / emitter.particleFade);
 
         SDL_SetRenderDrawColor(renderer, particle->color.r, particle->color.g, particle->color.b, particle->color.a);
         SDL_RenderDrawPoint(renderer, particle->position.x, particle->position.y);
@@ -339,19 +368,27 @@ void UpdateAndRenderSpriteParticles(SDL_Renderer *renderer, ParticleEmitter &emi
         // If we get here, we're not done with all particles
         allParticlesDone = false;
 
-        // Conversion of milliseconds into seconds
         particle->elapsed += delta * 0.001f;
-        particle->moveDelta += delta * 0.001f;
+        particle->moveDelta += delta;
+        particle->rotationCounter += delta * 0.001f;
 
         if(particle->elapsed >= emitter.particleDuration) {
             particle->inUse = false;
             continue;
         }
 
-        particle->position.x += (i32)(particle->direction.x * particle->velocity);
-        particle->position.y += (i32)(particle->direction.y * particle->velocity);
+        if(particle->rotationCounter >= particle->rotationRate) {
+            particle->angle += 1 * particle->rotationMagnitude;
+            particle->rotationCounter = 0;
+        }
 
-        particle->textureAlpha = (u8)(particle->textureAlpha / emitter.fade);
+        if(particle->moveDelta >= particle->velocity) {
+            particle->position.x += (i32)(particle->direction.x * particle->velocity);
+            particle->position.y += (i32)(particle->direction.y * particle->velocity);
+            particle->moveDelta = 0;
+        }
+
+        particle->textureAlpha = (u8)(particle->textureAlpha / emitter.particleFade);
 
         SDL_SetTextureAlphaMod(particle->texture, particle->textureAlpha);
 
@@ -367,7 +404,8 @@ void UpdateAndRenderSpriteParticles(SDL_Renderer *renderer, ParticleEmitter &emi
         destRect.w = particle->width;
         destRect.h = particle->height;
 
-        SDL_RenderCopy(renderer, particle->texture, &srcRect, &destRect);
+        SDL_RenderCopyEx(renderer, particle->texture, &srcRect, &destRect, particle->angle, &particle->rotationCenter,
+                         SDL_FLIP_NONE);
     }
 
     if(allParticlesDone) {
@@ -389,7 +427,7 @@ void UpdateAndRenderSpriteParticles(SDL_Renderer *renderer, ParticleEmitter &emi
 }
 
 int main() {
-    srand((u32)time(NULL));
+    srand((u32) time(NULL));
 
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
         printf("Error: %s\n", SDL_GetError());
@@ -403,15 +441,13 @@ int main() {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
         return -1;
     }
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_TARGETTEXTURE);
     if(renderer == nullptr) {
-        SDL_Log("Error creating SDL_Renderer!");
+        SDL_Log(SDL_GetError());
         return -1;
     }
-    if(SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) == 0) {
-        printf(SDL_GetError());
-    }
 
+    // TODO: This is just spammed in here. Obvious make this more dynamic to load different images.
     SDL_Surface *loadingSurface = IMG_Load("sprite\\woman_front2_larger.png");
     assert(loadingSurface != NULL);
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, loadingSurface);
@@ -428,7 +464,7 @@ int main() {
     (void) io;
 
     // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
+    ImGui::StyleColorsClassic();
 
     // Setup Platform/Renderer backends
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
@@ -439,7 +475,15 @@ int main() {
     EditorState state = {};
     V2 mousePosition = {};
 
-#if FIX_FRAMERATE
+    /*
+     * TODO: The window could be resized at which point we would need to generate a new texture of that size.
+     * That can be handled in an event handler. Copy the contents of this texture into a new one if
+     * we need to not "clear the screen" between frames.
+     */
+    SDL_Texture *particleTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, (i32)io.DisplaySize.x, (i32)io.DisplaySize.y);
+    SDL_SetTextureBlendMode(particleTexture, SDL_BLENDMODE_BLEND);
+
+#ifdef FIX_FRAMERATE
     // Set Windows thread resolution so we can maybe sleep in loop
     u32 desiredResolution = 1;
     const bool fixFramerate = (timeBeginPeriod(desiredResolution) == TIMERR_NOERROR);
@@ -481,7 +525,7 @@ int main() {
                 if(event.type == SDL_MOUSEBUTTONDOWN) {
                     SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
                     if(!emitter.initialized) {
-                        switch((ParticleType)state.particleType) {
+                        switch((ParticleType) state.particleType) {
                             case ParticleType::Pixel:
                                 InitEmitter(emitter, mousePosition, state);
                                 printf("Pixel emitter created\n");
@@ -504,40 +548,15 @@ int main() {
             continue;
         }
 
-        // Start the Dear ImGui frame
-        ImGui_ImplSDLRenderer2_NewFrame();
-        ImGui_ImplSDL2_NewFrame();
-        ImGui::NewFrame();
-
-        // Set up window
-        ImGui::Begin("Particle Emitter Settings");
-        ImGui::RadioButton("Pixel", &state.particleType, 0);
-        ImGui::RadioButton("Sprite", &state.particleType, 1);
-        ImGui::SliderInt("Max Particles", &state.maxParticles, 1, 5000);
-        ImGui::SliderInt("Emitter Width", &state.emitterWidth, 1, 250);
-        ImGui::SliderInt("Emitter Height", &state.emitterHeight, 1, 250);
-        ImGui::InputDouble("Emit Rate", &state.emitRate, 0.001f, 0.1f);
-        ImGui::SliderInt("Emit Magnitude", &state.emitMagnitude, 1, 100);
-        ImGui::Text("(0 Rate will emit all particles at once)");
-        ImGui::InputDouble("Emit Duration", &state.emitDuration, 1.0f, 1.0f);
-        ImGui::Checkbox("Show Emitter", &state.showEmitterBounds);
-        ImGui::InputDouble("Particle Duration", &state.particleDuration, 0.1f, 0.1f);
-        ImGui::InputDouble("Particle Fade", &state.particleFade, 1.0f, 0.5f);
-        ImGui::InputDouble("Particle Velocity", &state.particleVelocity, 1.0f, 1.0f);
-        ImGui::NewLine();
-        ImGui::Separator();
-        ImGui::NewLine();
-        ImGui::Text("Loop averages %.02f ms/f (%.02f FPS)", msPerFrame, fps);
-        ImGui::End();
-
-        // Rendering
-        ImGui::Render();
-        SDL_RenderSetScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-        SDL_RenderClear(renderer);
-        ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
-
-        switch((ParticleType)emitter.particleType) {
+        if(SDL_SetRenderTarget(renderer, particleTexture) != 0) {
+            SDL_Log("Cannot render to target: %s", SDL_GetError());
+        }
+        if(emitter.clearScreen) {
+            // Clear texture per frame
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+            SDL_RenderClear(renderer);
+        }
+        switch((ParticleType) emitter.particleType) {
             case ParticleType::Pixel:
                 UpdateAndRenderPixelParticles(renderer, emitter, msPerFrame);
                 break;
@@ -545,10 +564,71 @@ int main() {
                 UpdateAndRenderSpriteParticles(renderer, emitter, msPerFrame);
                 break;
         }
+        SDL_SetRenderTarget(renderer, NULL);
+        SDL_Rect srcPos;
+        srcPos.x = 0;
+        srcPos.y = 0;
+        srcPos.w = (i32)io.DisplaySize.x;
+        srcPos.h = (i32)io.DisplaySize.y;
+        SDL_RenderCopy(renderer, particleTexture, &srcPos, &srcPos);
+
+        // Start the Dear ImGui frame
+        ImGui_ImplSDLRenderer2_NewFrame();
+        ImGui_ImplSDL2_NewFrame();
+        ImGui::NewFrame();
+
+        // Set up window
+        ImGui::SetNextWindowBgAlpha(255);
+        ImGui::SetNextWindowPos(ImVec2(2, 2));
+        ImGui::SetNextWindowSize(ImVec2(400, 0));
+        bool open = true;
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar |
+                                       ImGuiWindowFlags_NoMove |
+                                       ImGuiWindowFlags_NoResize |
+                                       ImGuiWindowFlags_AlwaysAutoResize;
+        ImGui::Begin("Settings", &open, windowFlags);
+        ImGui::RadioButton("Pixel", &state.particleType, 0);
+        ImGui::RadioButton("Sprite", &state.particleType, 1);
+
+        ImGui::NewLine();
+        ImGui::SeparatorText("Emitter");
+
+        ImGui::SliderInt("Max Particles", &state.maxParticles, 1, 5000);
+        ImGui::SliderInt("Emitter Width", &state.emitterWidth, 1, 250);
+        ImGui::SliderInt("Emitter Height", &state.emitterHeight, 1, 250);
+        ImGui::InputDouble("Emit Rate", &state.emitRate, 0.001f, 0.1f);
+        ImGui::SliderInt("Emit Magnitude", &state.emitMagnitude, 1, 100);
+        ImGui::Text("(0 Rate will emit all particles at once)");
+        ImGui::InputDouble("Emit Duration", &state.emitDuration, 1.0f, 1.0f);
+        ImGui::Checkbox("Show Bounds", &state.showEmitterBounds);
+        ImGui::Checkbox("Clear Screen Between Frames", &state.clearScreen);
+
+        ImGui::NewLine();
+        ImGui::SeparatorText("Particle");
+
+        ImGui::InputDouble("Particle Duration", &state.particleDuration, 0.1f, 0.1f);
+        ImGui::InputDouble("Particle Fade", &state.particleFade, 1.0f, 0.5f);
+        ImGui::InputDouble("Particle Velocity", &state.particleVelocity, 1.0f, 1.0f);
+        if((ParticleType) state.particleType == ParticleType::Sprite) {
+            ImGui::InputDouble("Particle Rotation", &state.particleRotationRate, 0.1f, 1.0f);
+            ImGui::SliderInt("Rotation Magnitude", &state.particleRotationMagnitude, 0, 25);
+        }
+
+        ImGui::NewLine();
+        ImGui::SeparatorText("Stats");
+        ImGui::Text("Loop averages %.02f ms/f (%.02f FPS)", msPerFrame, fps);
+        ImGui::End();
+
+//        ImGui::ShowDemoWindow();
+
+        // Rendering
+        ImGui::Render();
+        SDL_RenderSetScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+        ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
 
         SDL_RenderPresent(renderer);
 
-#if FIX_FRAMERATE
+#ifdef FIX_FRAMERATE
         LARGE_INTEGER workCount = GetWallClock();
         double msElapsedForFrame = GetElapsedTime(lastCount, workCount);
         if(msElapsedForFrame < targetMsForFrame) {
@@ -570,7 +650,7 @@ int main() {
         elapsedCount = endCount.QuadPart - lastCount.QuadPart;
         elapsedCpuCycles = endCpuCycles - lastCpuCycles;
         msPerFrame = ((1000.0f * (double) elapsedCount) / (double) frequency);
-        refreshCounter += (u16)msPerFrame;
+        refreshCounter += (u16) msPerFrame;
         if(refreshCounter >= refreshMs) {
             fps = ((double) frequency / (double) elapsedCount);
             refreshCounter = 0;
