@@ -1,4 +1,5 @@
 #include "particlegenerator.h"
+#include "particles.h"
 #include "libs/SDL2-2.30.8/include/SDL.h"
 
 void InitSpriteParticle(ParticleEmitter &emitter, SpriteParticle *particle, SDL_Texture *texture, i32 width, i32 height,
