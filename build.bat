@@ -26,6 +26,7 @@ set CompilerOutputs=-Fmparticlegenerator.map -Feparticlegenerator.exe
 REM del /q *.pdb 2> NUL
 
 set Sources=%BASE%\main.cpp ^
+    %BASE%\particles.cpp ^
     %BASE%\libs\imgui\backends\imgui_impl_sdl2.cpp ^
     %BASE%\libs\imgui\backends\imgui_impl_sdlrenderer2.cpp ^
     %BASE%\libs\imgui\imgui.cpp ^
