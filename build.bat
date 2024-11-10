@@ -7,8 +7,8 @@ rmdir /S /Q %BASE%\build
 mkdir %BASE%\build
 pushd %BASE%\build
 
-xcopy /Y /D %BASE%\libs\SDL2-2.30.8\lib\x64\SDL2.dll
-xcopy /Y /D %BASE%\libs\SDL2_image-2.8.2\lib\x64\SDL2_image.dll
+xcopy /Y /D %BASE%\libs\SDL\lib\x64\SDL2.dll
+xcopy /Y /D %BASE%\libs\SDL_image\lib\x64\SDL2_image.dll
 xcopy /Y /D %BASE%\sprite sprite\
 
 REM -std:c++20 Use C++ 2020 standard
