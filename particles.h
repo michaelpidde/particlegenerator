@@ -1,7 +1,7 @@
 #pragma once
 
 #include "particlegenerator.h"
-#include "libs/SDL2-2.30.8/include/SDL.h"
+#include "libs/SDL/include/SDL.h"
 
 struct V2 {
     i32 x;

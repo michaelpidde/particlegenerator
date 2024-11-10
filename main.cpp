@@ -9,8 +9,8 @@
 #include "particlegenerator.h"
 #include "particles.h"
 
-#include "libs/SDL2-2.30.8/include/SDL.h"
-#include "libs/SDL2_image-2.8.2/include/SDL_image.h"
+#include "libs/SDL/include/SDL.h"
+#include "libs/SDL_image/include/SDL_image.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "libs/imgui/backends/imgui_impl_sdl2.h"

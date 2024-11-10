@@ -33,8 +33,8 @@ set Sources=%BASE%\main.cpp ^
     %BASE%\libs\imgui\imgui_draw.cpp ^
     %BASE%\libs\imgui\imgui_widgets.cpp ^
     %BASE%\libs\imgui\imgui_tables.cpp
-set Includes=-I %BASE%\libs\SDL2-2.30.8\include -I %BASE%\libs\SDL2_image-2.8.2\include -I %BASE%\libs\imgui
-set Libs=-LIBPATH:%BASE%\libs\SDL2-2.30.8\lib\x64 -LIBPATH:%BASE%\libs\SDL2_image-2.8.2\lib\x64 SDL2.lib SDL2main.lib SDL2_image.lib winmm.lib
+set Includes=-I %BASE%\libs\SDL\include -I %BASE%\libs\SDL_image\include -I %BASE%\libs\imgui
+set Libs=-LIBPATH:%BASE%\libs\SDL\lib\x64 -LIBPATH:%BASE%\libs\SDL_image\lib\x64 SDL2.lib SDL2main.lib SDL2_image.lib winmm.lib
 
 cl %CompilerFlags% %CompilerOutputs% %Sources% %Includes% %MyFlags% ^
 -link -subsystem:console -PDB:particlegenerator%random%.pdb %Libs%

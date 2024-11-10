@@ -2,7 +2,7 @@
 
 #include <windows.h>
 #include <stdint.h>
-#include "libs/SDL2-2.30.8/include/SDL.h"
+#include "libs/SDL/include/SDL.h"
 
 #define u64 uint64_t
 #define u32 uint32_t
