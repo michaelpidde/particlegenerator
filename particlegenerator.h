@@ -1,6 +1,6 @@
 #pragma once
 
-#include <windows.h>
+#include <cstdlib>
 #include <stdint.h>
 #include "libs/SDL/include/SDL.h"
 
