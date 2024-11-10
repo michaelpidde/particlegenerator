@@ -49,24 +49,34 @@ void InitPixelParticle(ParticleEmitter &emitter, PixelParticle *particle, bool i
     particle->velocity = emitter.particleVelocity;
     particle->elapsed = 0;
 
-    switch(RandomInteger(0, 2)) {
-        case 0:
-            particle->color.r = 255;
-            particle->color.g = 150;
-            particle->color.b = 150;
-            break;
-        case 1:
-            particle->color.r = 150;
-            particle->color.g = 150;
-            particle->color.b = 255;
-            break;
-        case 2:
+    switch((PixelColorScheme)emitter.pixelColorScheme) {
+        case PixelColorScheme::White:
             particle->color.r = 255;
             particle->color.g = 255;
             particle->color.b = 255;
+            particle->color.a = 255;
+            break;
+        case PixelColorScheme::America:
+            switch(RandomInteger(0, 2)) {
+                case 0:
+                    particle->color.r = 255;
+                    particle->color.g = 0;
+                    particle->color.b = 0;
+                    break;
+                case 1:
+                    particle->color.r = 0;
+                    particle->color.g = 0;
+                    particle->color.b = 255;
+                    break;
+                case 2:
+                    particle->color.r = 255;
+                    particle->color.g = 255;
+                    particle->color.b = 255;
+                    break;
+            }
+            particle->color.a = 255;
             break;
     }
-    particle->color.a = 255;
 
     particle->direction = {
         .x = RandomInteger(-10, 10),
@@ -100,6 +110,7 @@ void BaseEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state)
     emitter.particleRotationRate = state.particleRotationRate;
     emitter.particleRotationMagnitude = state.particleRotationMagnitude;
     emitter.clearScreen = state.clearScreen;
+    emitter.pixelColorScheme = state.pixelColorScheme;
 }
 
 void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state) {

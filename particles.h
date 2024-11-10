@@ -47,6 +47,10 @@ enum ParticleType {
     Pixel, Sprite
 };
 
+enum PixelColorScheme {
+    White, America
+};
+
 struct ParticleEmitter {
     bool initialized = false;
     u32 maxParticles = 5000;
@@ -69,6 +73,7 @@ struct ParticleEmitter {
         PixelParticle *pixels;
         SpriteParticle *sprites;
     } particles;
+    i32 pixelColorScheme = 0;
     bool clearScreen = true;
 };
 

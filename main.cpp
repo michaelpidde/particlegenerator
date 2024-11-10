@@ -131,14 +131,14 @@ int main() {
                         switch((ParticleType) state.particleType) {
                             case ParticleType::Pixel:
                                 InitEmitter(emitter, mousePosition, state);
-                                printf("Pixel emitter created\n");
+//                                printf("Pixel emitter created\n");
                                 break;
                             case ParticleType::Sprite:
                                 InitEmitter(emitter, mousePosition, state, texture, textureWidth, textureHeight);
-                                printf("Sprite emitter created\n");
+//                                printf("Sprite emitter created\n");
                                 break;
                             default:
-                                printf("Can't create emitter type %d\n", state.particleType);
+//                                printf("Can't create emitter type %d\n", state.particleType);
                                 break;
                         }
 
@@ -212,6 +212,9 @@ int main() {
         ImGui::InputDouble("Particle Duration", &state.particleDuration, 0.1f, 0.1f);
         ImGui::InputDouble("Particle Fade", &state.particleFade, 1.0f, 0.5f);
         ImGui::InputDouble("Particle Velocity", &state.particleVelocity, 1.0f, 1.0f);
+        if((ParticleType) state.particleType == ParticleType::Pixel) {
+            ImGui::Combo("Color Style", &state.pixelColorScheme, "White\0America\0\0");
+        }
         if((ParticleType) state.particleType == ParticleType::Sprite) {
             ImGui::InputDouble("Particle Rotation", &state.particleRotationRate, 0.1f, 1.0f);
             ImGui::SliderInt("Rotation Magnitude", &state.particleRotationMagnitude, 0, 25);

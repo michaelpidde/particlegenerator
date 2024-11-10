@@ -28,6 +28,7 @@ struct EditorState {
     double particleRotationRate = 0.0f;
     i32 particleRotationMagnitude = 0;
     bool clearScreen = true;
+    i32 pixelColorScheme = 0;
 };
 
 inline i32 RandomInteger(i32 min, i32 max) {
