@@ -19,7 +19,10 @@ REM -EHa- Turn off C++ exceptions
 REM -Zi Output debug info
 REM -favor select processor to optimize for
 REM -MP[n] use up to 'n' processes for compilation. If you omit the processMax argument, the compiler retrieves the number of effective processors on your computer from the operating system, and creates a process for each processor.
-set CompilerFlags=-nologo -std:c++20 -MD -W4 -WX -EHa- -Zi -favor:INTEL64 -MP
+REM -wd Disable warning number
+REM     C4530: C++ exception handler used, but unwind semantics are not enabled.
+REM     C4189: local variable is initialized but not referenced
+set CompilerFlags=-nologo -std:c++20 -MD -W4 -WX -EHa- -Zi -favor:INTEL64 -MP -wd4530 -wd4189
 set MyFlags=-DFIX_FRAMERATE
 set CompilerOutputs=-Fmparticlegenerator.map -Feparticlegenerator.exe
 

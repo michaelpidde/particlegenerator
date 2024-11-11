@@ -1,6 +1,10 @@
 #include <cassert>
+#include <cstdlib>
 #include <ctime>
+#include <filesystem>
+#include <iterator>
 #include <iostream>
+#include <string.h>
 #include <windows.h>
 
 // This is dumb. Define this prior to ANYTHING that includes SDL.h
@@ -50,16 +54,6 @@ int main() {
         return -1;
     }
 
-    // TODO: This is just spammed in here. Obvious make this more dynamic to load different images.
-    SDL_Surface *loadingSurface = IMG_Load("sprite\\woman_front2_larger.png");
-    assert(loadingSurface != NULL);
-    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, loadingSurface);
-    assert(texture != NULL);
-    SDL_FreeSurface(loadingSurface);
-    i32 textureWidth = 0;
-    i32 textureHeight = 0;
-    SDL_QueryTexture(texture, NULL, NULL, &textureWidth, &textureHeight);
-
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -78,6 +72,24 @@ int main() {
     EditorState state = {};
     V2 mousePosition = {};
 
+    const auto path = std::filesystem::path("sprite");
+    const auto dirItr = std::filesystem::directory_iterator(path);
+    for(const auto &entry : dirItr) ++state.spriteCount;
+    state.sprites = (SpriteAsset *) malloc(sizeof(SpriteAsset) * state.spriteCount);
+    SpriteAsset *currentSprite = state.sprites;
+
+    const auto dirItr2 = std::filesystem::directory_iterator(path);
+    for(const auto &entry : dirItr2) {
+        SDL_Surface *loadingSurface = IMG_Load(entry.path().string().c_str());
+        assert(loadingSurface != NULL);
+        currentSprite->texture = SDL_CreateTextureFromSurface(renderer, loadingSurface);
+        assert(currentSprite->texture != NULL);
+        SDL_FreeSurface(loadingSurface);
+        SDL_QueryTexture(currentSprite->texture, NULL, NULL, &currentSprite->width, &currentSprite->height);
+        strcpy_s(currentSprite->name, 255, entry.path().string().c_str());
+        ++currentSprite;
+    }
+
     /*
      * TODO: The window could be resized at which point we would need to generate a new texture of that size.
      * That can be handled in an event handler. Copy the contents of this texture into a new one if
@@ -94,7 +106,7 @@ int main() {
     const double targetMsForFrame = (1.0 / targetFramerate) * 1000;
 #endif
     // These control how often we should refresh the FPS display
-    const u16 refreshMs = 100;
+    const u16 refreshMs = 500;
     u16 refreshCounter = 0;
 
     LARGE_INTEGER performanceFrequencyQuery;
@@ -130,11 +142,11 @@ int main() {
                     if(!emitter.initialized) {
                         switch((ParticleType) state.particleType) {
                             case ParticleType::Pixel:
-                                InitEmitter(emitter, mousePosition, state);
+                                InitEmitter(emitter, mousePosition, state, ParticleType::Pixel);
 //                                printf("Pixel emitter created\n");
                                 break;
                             case ParticleType::Sprite:
-                                InitEmitter(emitter, mousePosition, state, texture, textureWidth, textureHeight);
+                                InitEmitter(emitter, mousePosition, state, ParticleType::Sprite);
 //                                printf("Sprite emitter created\n");
                                 break;
                             default:
@@ -218,6 +230,24 @@ int main() {
         if((ParticleType) state.particleType == ParticleType::Sprite) {
             ImGui::InputDouble("Particle Rotation", &state.particleRotationRate, 0.1f, 1.0f);
             ImGui::SliderInt("Rotation Magnitude", &state.particleRotationMagnitude, 0, 25);
+            if(state.spriteCount > 0) {
+                if(ImGui::BeginCombo("Sprite Image", state.sprites[state.selectedSprite].name)) {
+                    for(i32 i = 0; i < state.spriteCount; ++i) {
+                        const bool selected = (state.selectedSprite == i);
+                        ImGui::PushID(i);
+                        if(ImGui::Selectable(state.sprites[i].name, selected)) {
+                            state.selectedSprite = i;
+                        }
+                        if(selected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::EndCombo();
+                }
+            } else {
+                // Something to add a folder?
+            }
         }
 
         ImGui::NewLine();

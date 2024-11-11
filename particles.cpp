@@ -111,29 +111,33 @@ void BaseEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state)
     emitter.particleRotationMagnitude = state.particleRotationMagnitude;
     emitter.clearScreen = state.clearScreen;
     emitter.pixelColorScheme = state.pixelColorScheme;
+    emitter.selectedSprite = state.selectedSprite;
 }
 
-void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state) {
+void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state, ParticleType type) {
     BaseEmitter(emitter, clickPosition, state);
 
     // TODO: Arena allocate if this is brought into game code
-    emitter.particles.pixels = (PixelParticle *) malloc(sizeof(PixelParticle) * emitter.maxParticles);
-    for(u32 i = 0; i < emitter.maxParticles; ++i) {
-        PixelParticle *particle = &emitter.particles.pixels[i];
-        InitPixelParticle(emitter, particle, false);
+    switch(type) {
+        case ParticleType::Pixel:
+            emitter.particles.pixels = (PixelParticle *) malloc(sizeof(PixelParticle) * emitter.maxParticles);
+            for(u32 i = 0; i < emitter.maxParticles; ++i) {
+                PixelParticle *particle = &emitter.particles.pixels[i];
+                InitPixelParticle(emitter, particle, false);
+            }
+            break;
+        case ParticleType::Sprite:
+            emitter.particles.sprites = (SpriteParticle *) malloc(sizeof(SpriteParticle) * emitter.maxParticles);
+            SDL_Texture *texture = state.sprites[state.selectedSprite].texture;
+            i32 width = state.sprites[state.selectedSprite].width;
+            i32 height = state.sprites[state.selectedSprite].height;
+            for(u32 i = 0; i < emitter.maxParticles; ++i) {
+                SpriteParticle *particle = &emitter.particles.sprites[i];
+                InitSpriteParticle(emitter, particle, texture, width, height, false);
+            }
+            break;
     }
-    emitter.initialized = true;
-}
 
-void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state, SDL_Texture *texture, i32 width,
-                 i32 height) {
-    BaseEmitter(emitter, clickPosition, state);
-
-    emitter.particles.sprites = (SpriteParticle *) malloc(sizeof(SpriteParticle) * emitter.maxParticles);
-    for(u32 i = 0; i < emitter.maxParticles; ++i) {
-        SpriteParticle *particle = &emitter.particles.sprites[i];
-        InitSpriteParticle(emitter, particle, texture, width, height, false);
-    }
     emitter.initialized = true;
 }
 

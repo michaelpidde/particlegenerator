@@ -74,12 +74,11 @@ struct ParticleEmitter {
         SpriteParticle *sprites;
     } particles;
     i32 pixelColorScheme = 0;
+    i32 selectedSprite = 0;
     bool clearScreen = true;
 };
 
-void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state);
-void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state, SDL_Texture *texture, i32 width,
-                 i32 height);
+void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state, ParticleType type);
 
 void InitSpriteParticle(ParticleEmitter &emitter, SpriteParticle *particle, SDL_Texture *texture, i32 width, i32 height,
                         bool inUse);

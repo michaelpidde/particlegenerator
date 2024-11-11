@@ -13,6 +13,13 @@
 #define i16 int16_t
 #define i8 int8_t
 
+struct SpriteAsset {
+    i32 width = 0;
+    i32 height = 0;
+    SDL_Texture *texture;
+    char name[255];
+};
+
 struct EditorState {
     i32 maxParticles = 5000;
     i32 emitterWidth = 32;
@@ -29,6 +36,9 @@ struct EditorState {
     i32 particleRotationMagnitude = 0;
     bool clearScreen = true;
     i32 pixelColorScheme = 0;
+    i32 spriteCount = 0;
+    i32 selectedSprite = 0;
+    SpriteAsset *sprites;
 };
 
 inline i32 RandomInteger(i32 min, i32 max) {
