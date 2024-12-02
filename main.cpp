@@ -1,8 +1,5 @@
-#include <cassert>
 #include <cstdlib>
 #include <ctime>
-#include <filesystem>
-#include <iterator>
 #include <iostream>
 #include <string.h>
 #include <windows.h>
@@ -10,11 +7,8 @@
 // This is dumb. Define this prior to ANYTHING that includes SDL.h
 #define SDL_MAIN_HANDLED
 
-#include "particlegenerator.h"
+#include "api\particlegenerator.h"
 #include "particles.h"
-
-#include "libs/SDL/include/SDL.h"
-#include "libs/SDL_image/include/SDL_image.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "libs/imgui/backends/imgui_impl_sdl2.h"
@@ -69,26 +63,10 @@ int main() {
 
     // Editor state
     ParticleEmitter emitter = {};
-    EditorState state = {};
+    EmitterConfiguration config = {};
     V2 mousePosition = {};
 
-    const auto path = std::filesystem::path("sprite");
-    const auto dirItr = std::filesystem::directory_iterator(path);
-    for(const auto &entry : dirItr) ++state.spriteCount;
-    state.sprites = (SpriteAsset *) malloc(sizeof(SpriteAsset) * state.spriteCount);
-    SpriteAsset *currentSprite = state.sprites;
-
-    const auto dirItr2 = std::filesystem::directory_iterator(path);
-    for(const auto &entry : dirItr2) {
-        SDL_Surface *loadingSurface = IMG_Load(entry.path().string().c_str());
-        assert(loadingSurface != NULL);
-        currentSprite->texture = SDL_CreateTextureFromSurface(renderer, loadingSurface);
-        assert(currentSprite->texture != NULL);
-        SDL_FreeSurface(loadingSurface);
-        SDL_QueryTexture(currentSprite->texture, NULL, NULL, &currentSprite->width, &currentSprite->height);
-        strcpy_s(currentSprite->name, 255, entry.path().string().c_str());
-        ++currentSprite;
-    }
+    LoadParticleSprites(renderer, &config, "sprite");
 
     /*
      * TODO: The window could be resized at which point we would need to generate a new texture of that size.
@@ -140,17 +118,12 @@ int main() {
                 if(event.type == SDL_MOUSEBUTTONDOWN) {
                     SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
                     if(!emitter.initialized) {
-                        switch((ParticleType) state.particleType) {
+                        switch((ParticleType) config.particleType) {
                             case ParticleType::Pixel:
-                                InitEmitter(emitter, mousePosition, state, ParticleType::Pixel);
-//                                printf("Pixel emitter created\n");
+                                InitEmitter(emitter, mousePosition, config, ParticleType::Pixel);
                                 break;
                             case ParticleType::Sprite:
-                                InitEmitter(emitter, mousePosition, state, ParticleType::Sprite);
-//                                printf("Sprite emitter created\n");
-                                break;
-                            default:
-//                                printf("Can't create emitter type %d\n", state.particleType);
+                                InitEmitter(emitter, mousePosition, config, ParticleType::Sprite);
                                 break;
                         }
 
@@ -171,14 +144,9 @@ int main() {
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
         }
-        switch((ParticleType) emitter.particleType) {
-            case ParticleType::Pixel:
-                UpdateAndRenderPixelParticles(renderer, emitter, msPerFrame);
-                break;
-            case ParticleType::Sprite:
-                UpdateAndRenderSpriteParticles(renderer, emitter, msPerFrame);
-                break;
-        }
+        
+        UpdateAndRenderParticles(renderer, emitter, msPerFrame);
+
         SDL_SetRenderTarget(renderer, NULL);
         SDL_Rect srcPos;
         srcPos.x = 0;
@@ -202,41 +170,41 @@ int main() {
                                        ImGuiWindowFlags_NoResize |
                                        ImGuiWindowFlags_AlwaysAutoResize;
         ImGui::Begin("Settings", &open, windowFlags);
-        ImGui::RadioButton("Pixel", &state.particleType, 0);
-        ImGui::RadioButton("Sprite", &state.particleType, 1);
+        ImGui::RadioButton("Pixel", &config.particleType, 0);
+        ImGui::RadioButton("Sprite", &config.particleType, 1);
 
         ImGui::NewLine();
         ImGui::SeparatorText("Emitter");
 
-        ImGui::SliderInt("Max Particles", &state.maxParticles, 1, 5000);
-        ImGui::SliderInt("Emitter Width", &state.emitterWidth, 1, 250);
-        ImGui::SliderInt("Emitter Height", &state.emitterHeight, 1, 250);
-        ImGui::InputDouble("Emit Rate", &state.emitRate, 0.001f, 0.1f);
-        ImGui::SliderInt("Emit Magnitude", &state.emitMagnitude, 1, 100);
+        ImGui::SliderInt("Max Particles", &config.maxParticles, 1, 5000);
+        ImGui::SliderInt("Emitter Width", &config.emitterWidth, 1, 250);
+        ImGui::SliderInt("Emitter Height", &config.emitterHeight, 1, 250);
+        ImGui::InputDouble("Emit Rate", &config.emitRate, 0.001f, 0.1f);
+        ImGui::SliderInt("Emit Magnitude", &config.emitMagnitude, 1, 100);
         ImGui::Text("(0 Rate will emit all particles at once)");
-        ImGui::InputDouble("Emit Duration", &state.emitDuration, 1.0f, 1.0f);
-        ImGui::Checkbox("Show Bounds", &state.showEmitterBounds);
-        ImGui::Checkbox("Clear Screen Between Frames", &state.clearScreen);
+        ImGui::InputDouble("Emit Duration", &config.emitDuration, 1.0f, 1.0f);
+        ImGui::Checkbox("Show Bounds", &config.showEmitterBounds);
+        ImGui::Checkbox("Clear Screen Between Frames", &config.clearScreen);
 
         ImGui::NewLine();
         ImGui::SeparatorText("Particle");
 
-        ImGui::InputDouble("Particle Duration", &state.particleDuration, 0.1f, 0.1f);
-        ImGui::InputDouble("Particle Fade", &state.particleFade, 1.0f, 0.5f);
-        ImGui::InputDouble("Particle Velocity", &state.particleVelocity, 1.0f, 1.0f);
-        if((ParticleType) state.particleType == ParticleType::Pixel) {
-            ImGui::Combo("Color Style", &state.pixelColorScheme, "White\0America\0\0");
+        ImGui::InputDouble("Particle Duration", &config.particleDuration, 0.1f, 0.1f);
+        ImGui::InputDouble("Particle Fade", &config.particleFade, 1.0f, 0.5f);
+        ImGui::InputDouble("Particle Velocity", &config.particleVelocity, 1.0f, 1.0f);
+        if((ParticleType) config.particleType == ParticleType::Pixel) {
+            ImGui::Combo("Color Style", &config.pixelColorScheme, "White\0America\0\0");
         }
-        if((ParticleType) state.particleType == ParticleType::Sprite) {
-            ImGui::InputDouble("Particle Rotation", &state.particleRotationRate, 0.1f, 1.0f);
-            ImGui::SliderInt("Rotation Magnitude", &state.particleRotationMagnitude, 0, 25);
-            if(state.spriteCount > 0) {
-                if(ImGui::BeginCombo("Sprite Image", state.sprites[state.selectedSprite].name)) {
-                    for(i32 i = 0; i < state.spriteCount; ++i) {
-                        const bool selected = (state.selectedSprite == i);
+        if((ParticleType) config.particleType == ParticleType::Sprite) {
+            ImGui::InputDouble("Particle Rotation", &config.particleRotationRate, 0.1f, 1.0f);
+            ImGui::SliderInt("Rotation Magnitude", &config.particleRotationMagnitude, 0, 25);
+            if(config.spriteCount > 0) {
+                if(ImGui::BeginCombo("Sprite Image", config.sprites[config.selectedSprite].name)) {
+                    for(i32 i = 0; i < config.spriteCount; ++i) {
+                        const bool selected = (config.selectedSprite == i);
                         ImGui::PushID(i);
-                        if(ImGui::Selectable(state.sprites[i].name, selected)) {
-                            state.selectedSprite = i;
+                        if(ImGui::Selectable(config.sprites[i].name, selected)) {
+                            config.selectedSprite = i;
                         }
                         if(selected) {
                             ImGui::SetItemDefaultFocus();
@@ -263,7 +231,6 @@ int main() {
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
 
         SDL_RenderPresent(renderer);
-
 #ifdef FIX_FRAMERATE
         LARGE_INTEGER workCount = GetWallClock();
         double msElapsedForFrame = GetElapsedTime(lastCount, workCount);

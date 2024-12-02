@@ -1,9 +1,10 @@
-#include "particlegenerator.h"
+#include "api\particlegenerator.h"
 #include "particles.h"
 #include "libs/SDL/include/SDL.h"
+// cpp_common
+#include "methods.h"
 
-void InitSpriteParticle(ParticleEmitter &emitter, SpriteParticle *particle, SDL_Texture *texture, i32 width, i32 height,
-                        bool inUse) {
+void InitSpriteParticle(ParticleEmitter &emitter, SpriteParticle *particle, SDL_Texture *texture, i32 width, i32 height, bool inUse) {
     emitter.particleType = ParticleType::Sprite;
 
     // Emit entire particle collection at once
@@ -18,11 +19,11 @@ void InitSpriteParticle(ParticleEmitter &emitter, SpriteParticle *particle, SDL_
     particle->rotationMagnitude = emitter.particleRotationMagnitude;
     particle->rotationCounter = 0.0f;
     particle->angle = 0.0f;
-
     particle->texture = texture;
-    particle->textureAlpha = 255;
     particle->width = width;
     particle->height = height;
+
+    particle->textureAlpha = 255;
 
     particle->rotationCenter.x = (i32)(particle->width / 2);
     particle->rotationCenter.y = (i32)(particle->height / 2);
@@ -88,34 +89,34 @@ void InitPixelParticle(ParticleEmitter &emitter, PixelParticle *particle, bool i
     };
 }
 
-void BaseEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state) {
+void BaseEmitter(ParticleEmitter &emitter, V2 origin, EmitterConfiguration &config) {
     emitter = {};
-    emitter.width = state.emitterWidth;
-    emitter.height = state.emitterHeight;
+    emitter.width = config.emitterWidth;
+    emitter.height = config.emitterHeight;
 
     emitter.position = {
-        .x = clickPosition.x - ((i32) emitter.width / 2),
-        .y = clickPosition.y - ((i32) emitter.height / 2)
+        .x = origin.x - ((i32) emitter.width / 2),
+        .y = origin.y - ((i32) emitter.height / 2)
     };
 
-    emitter.maxParticles = state.maxParticles;
-    emitter.particleType = state.particleType;
-    emitter.particleDuration = state.particleDuration;
-    emitter.particleVelocity = state.particleVelocity;
-    emitter.particleFade = state.particleFade;
-    emitter.showBounds = state.showEmitterBounds;
-    emitter.emitRate = state.emitRate;
-    emitter.emitDuration = state.emitDuration;
-    emitter.emitMagnitude = state.emitMagnitude;
-    emitter.particleRotationRate = state.particleRotationRate;
-    emitter.particleRotationMagnitude = state.particleRotationMagnitude;
-    emitter.clearScreen = state.clearScreen;
-    emitter.pixelColorScheme = state.pixelColorScheme;
-    emitter.selectedSprite = state.selectedSprite;
+    emitter.maxParticles = config.maxParticles;
+    emitter.particleType = config.particleType;
+    emitter.particleDuration = config.particleDuration;
+    emitter.particleVelocity = config.particleVelocity;
+    emitter.particleFade = config.particleFade;
+    emitter.showBounds = config.showEmitterBounds;
+    emitter.emitRate = config.emitRate;
+    emitter.emitDuration = config.emitDuration;
+    emitter.emitMagnitude = config.emitMagnitude;
+    emitter.particleRotationRate = config.particleRotationRate;
+    emitter.particleRotationMagnitude = config.particleRotationMagnitude;
+    emitter.clearScreen = config.clearScreen;
+    emitter.pixelColorScheme = config.pixelColorScheme;
+    emitter.selectedSprite = config.selectedSprite;
 }
 
-void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state, ParticleType type) {
-    BaseEmitter(emitter, clickPosition, state);
+void InitEmitter(ParticleEmitter &emitter, V2 origin, EmitterConfiguration &config, ParticleType type) {
+    BaseEmitter(emitter, origin, config);
 
     // TODO: Arena allocate if this is brought into game code
     switch(type) {
@@ -128,9 +129,9 @@ void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state,
             break;
         case ParticleType::Sprite:
             emitter.particles.sprites = (SpriteParticle *) malloc(sizeof(SpriteParticle) * emitter.maxParticles);
-            SDL_Texture *texture = state.sprites[state.selectedSprite].texture;
-            i32 width = state.sprites[state.selectedSprite].width;
-            i32 height = state.sprites[state.selectedSprite].height;
+            SDL_Texture *texture = config.sprites[config.selectedSprite].texture;
+            i32 width = config.sprites[config.selectedSprite].width;
+            i32 height = config.sprites[config.selectedSprite].height;
             for(u32 i = 0; i < emitter.maxParticles; ++i) {
                 SpriteParticle *particle = &emitter.particles.sprites[i];
                 InitSpriteParticle(emitter, particle, texture, width, height, false);
@@ -141,7 +142,7 @@ void InitEmitter(ParticleEmitter &emitter, V2 clickPosition, EditorState &state,
     emitter.initialized = true;
 }
 
-void UpdateAndRenderPixelParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, double delta) {
+void UpdateAndRenderParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, double delta) {
     if(!emitter.initialized) {
         return;
     }
@@ -149,17 +150,43 @@ void UpdateAndRenderPixelParticles(SDL_Renderer *renderer, ParticleEmitter &emit
     if(emitter.emitDurationCounter <= emitter.emitDuration) {
         if(emitter.emitRateCounter >= emitter.emitRate || emitter.emitRateCounter == -1) {
             i32 magnitudeCount = 0;
-            for(u32 i = 0; i < emitter.maxParticles; ++i) {
-                PixelParticle *particle = &emitter.particles.pixels[i];
-                if(!particle->inUse) {
-                    InitPixelParticle(emitter, particle, true);
-                    if(emitter.emitMagnitude > 1 && magnitudeCount < emitter.emitMagnitude) {
-                        ++magnitudeCount;
-                    } else {
-                        break;
-                    }
-                }
+            PixelParticle *pixel;
+            SpriteParticle *sprite;
+
+            bool emitMoreParticles = false;
+            u32 i = 0;
+            if(i < emitter.maxParticles) {
+                emitMoreParticles = true;
             }
+            while(emitMoreParticles) {
+                switch(emitter.particleType) {
+                    case ParticleType::Pixel:
+                        pixel = &emitter.particles.pixels[i];
+                        if(!pixel->inUse) {
+                            InitPixelParticle(emitter, pixel, true);
+                            if(emitter.emitMagnitude > 1 && magnitudeCount < emitter.emitMagnitude) {
+                                ++magnitudeCount;
+                            } else {
+                                emitMoreParticles = false;
+                            }
+                        }
+                    break;
+                    case ParticleType::Sprite:
+                        sprite = &emitter.particles.sprites[i];
+                        if(!sprite->inUse) {
+                            InitSpriteParticle(emitter, sprite, sprite->texture, sprite->width, sprite->height, true);
+                            if(emitter.emitMagnitude > 1 && magnitudeCount < emitter.emitMagnitude) {
+                                ++magnitudeCount;
+                            } else {
+                                emitMoreParticles = false;
+                            }
+                        }
+                    break;
+                }
+
+                ++i;
+            }
+
 
             emitter.emitRateCounter = 0;
         } else {
@@ -170,139 +197,113 @@ void UpdateAndRenderPixelParticles(SDL_Renderer *renderer, ParticleEmitter &emit
     }
 
     bool allParticlesDone = true;
-    for(u32 i = 0; i < emitter.maxParticles; ++i) {
-        PixelParticle *particle = &emitter.particles.pixels[i];
 
-        if(!particle->inUse) {
-            continue;
-        }
+    /*
+     * Iterate individual particles to move and render them
+     */
+    switch(emitter.particleType) {
 
-        // If we get here, we're not done with all particles
-        allParticlesDone = false;
 
-        // Conversion of milliseconds into seconds
-        particle->elapsed += delta * 0.001f;
-        particle->moveDelta += delta;
-
-        if(particle->elapsed >= emitter.particleDuration) {
-            particle->inUse = false;
-            continue;
-        }
-
-        if(particle->moveDelta >= particle->velocity) {
-            particle->position.x += (i32)(particle->direction.x * particle->velocity);
-            particle->position.y += (i32)(particle->direction.y * particle->velocity);
-            particle->moveDelta = 0;
-        }
-
-        // TODO: This probably needs to be wrapped in a counter
-        particle->color.a = (u8)(particle->color.a / emitter.particleFade);
-
-        SDL_SetRenderDrawColor(renderer, particle->color.r, particle->color.g, particle->color.b, particle->color.a);
-        SDL_RenderDrawPoint(renderer, particle->position.x, particle->position.y);
-    }
-
-    if(allParticlesDone) {
-//        printf("Deallocate Pixels\n");
-        emitter.initialized = false;
-        free(emitter.particles.pixels);
-        return;
-    }
-
-    if(emitter.showBounds) {
-        SDL_Rect rect = {};
-        rect.h = emitter.height;
-        rect.w = emitter.width;
-        rect.x = emitter.position.x;
-        rect.y = emitter.position.y;
-        SDL_SetRenderDrawColor(renderer, 100, 200, 255, 255);
-        SDL_RenderDrawRect(renderer, &rect);
-    }
-}
-
-void UpdateAndRenderSpriteParticles(SDL_Renderer *renderer, ParticleEmitter &emitter, double delta) {
-    if(!emitter.initialized) {
-        return;
-    }
-
-    if(emitter.emitDurationCounter <= emitter.emitDuration) {
-        if(emitter.emitRateCounter >= emitter.emitRate || emitter.emitRateCounter == -1) {
-            i32 magnitudeCount = 0;
+        case ParticleType::Pixel:
             for(u32 i = 0; i < emitter.maxParticles; ++i) {
-                SpriteParticle *particle = &emitter.particles.sprites[i];
-                if(!particle->inUse) {
-                    InitSpriteParticle(emitter, particle, particle->texture, particle->width, particle->height, true);
-                    if(emitter.emitMagnitude > 1 && magnitudeCount < emitter.emitMagnitude) {
-                        ++magnitudeCount;
-                    } else {
-                        break;
-                    }
+                PixelParticle *pixel = &emitter.particles.pixels[i];
+
+                if(!pixel->inUse) {
+                    continue;
                 }
+
+                // If we get here, we're not done with all particles
+                allParticlesDone = false;
+
+                // Conversion of milliseconds into seconds
+                pixel->elapsed += delta * 0.001f;
+                pixel->moveDelta += delta;
+
+                if(pixel->elapsed >= emitter.particleDuration) {
+                    pixel->inUse = false;
+                    continue;
+                }
+
+                if(pixel->moveDelta >= pixel->velocity) {
+                    pixel->position.x += (i32)(pixel->direction.x * pixel->velocity);
+                    pixel->position.y += (i32)(pixel->direction.y * pixel->velocity);
+                    pixel->moveDelta = 0;
+                }
+
+                // TODO: This probably needs to be wrapped in a counter
+                pixel->color.a = (u8)(pixel->color.a / emitter.particleFade);
+
+                SDL_SetRenderDrawColor(renderer, pixel->color.r, pixel->color.g, pixel->color.b, pixel->color.a);
+                SDL_RenderDrawPoint(renderer, pixel->position.x, pixel->position.y);
             }
+        break;
 
-            emitter.emitRateCounter = 0;
-        } else {
-            emitter.emitRateCounter += delta * 0.001f;
-        }
 
-        emitter.emitDurationCounter += delta * 0.001f;
-    }
+        case ParticleType::Sprite:
+            for(u32 i = 0; i < emitter.maxParticles; ++i) {
+                SpriteParticle *sprite = &emitter.particles.sprites[i];
 
-    bool allParticlesDone = true;
-    for(u32 i = 0; i < emitter.maxParticles; ++i) {
-        SpriteParticle *particle = &emitter.particles.sprites[i];
+                if(!sprite->inUse) {
+                    continue;
+                }
 
-        if(!particle->inUse) {
-            continue;
-        }
+                // If we get here, we're not done with all particles
+                allParticlesDone = false;
 
-        // If we get here, we're not done with all particles
-        allParticlesDone = false;
+                sprite->elapsed += delta * 0.001f;
+                sprite->moveDelta += delta;
+                sprite->rotationCounter += delta * 0.001f;
 
-        particle->elapsed += delta * 0.001f;
-        particle->moveDelta += delta;
-        particle->rotationCounter += delta * 0.001f;
+                if(sprite->elapsed >= emitter.particleDuration) {
+                    sprite->inUse = false;
+                    continue;
+                }
 
-        if(particle->elapsed >= emitter.particleDuration) {
-            particle->inUse = false;
-            continue;
-        }
+                if(sprite->rotationCounter >= sprite->rotationRate) {
+                    sprite->angle += 1 * sprite->rotationMagnitude;
+                    sprite->rotationCounter = 0;
+                }
 
-        if(particle->rotationCounter >= particle->rotationRate) {
-            particle->angle += 1 * particle->rotationMagnitude;
-            particle->rotationCounter = 0;
-        }
+                if(sprite->moveDelta >= sprite->velocity) {
+                    sprite->position.x += (i32)(sprite->direction.x * sprite->velocity);
+                    sprite->position.y += (i32)(sprite->direction.y * sprite->velocity);
+                    sprite->moveDelta = 0;
+                }
 
-        if(particle->moveDelta >= particle->velocity) {
-            particle->position.x += (i32)(particle->direction.x * particle->velocity);
-            particle->position.y += (i32)(particle->direction.y * particle->velocity);
-            particle->moveDelta = 0;
-        }
+                sprite->textureAlpha = (u8)(sprite->textureAlpha / emitter.particleFade);
 
-        particle->textureAlpha = (u8)(particle->textureAlpha / emitter.particleFade);
+                SDL_SetTextureAlphaMod(sprite->texture, sprite->textureAlpha);
 
-        SDL_SetTextureAlphaMod(particle->texture, particle->textureAlpha);
+                SDL_Rect srcRect;
+                srcRect.x = 0;
+                srcRect.y = 0;
+                srcRect.w = sprite->width;
+                srcRect.h = sprite->height;
 
-        SDL_Rect srcRect;
-        srcRect.x = 0;
-        srcRect.y = 0;
-        srcRect.w = particle->width;
-        srcRect.h = particle->height;
+                SDL_Rect destRect;
+                destRect.x = sprite->position.x;
+                destRect.y = sprite->position.y;
+                destRect.w = sprite->width;
+                destRect.h = sprite->height;
 
-        SDL_Rect destRect;
-        destRect.x = particle->position.x;
-        destRect.y = particle->position.y;
-        destRect.w = particle->width;
-        destRect.h = particle->height;
+                SDL_RenderCopyEx(renderer, sprite->texture, &srcRect, &destRect, sprite->angle, &sprite->rotationCenter,
+                                SDL_FLIP_NONE);
+            }
+        break;
 
-        SDL_RenderCopyEx(renderer, particle->texture, &srcRect, &destRect, particle->angle, &particle->rotationCenter,
-                         SDL_FLIP_NONE);
+
     }
 
     if(allParticlesDone) {
-//        printf("Deallocate Sprites\n");
         emitter.initialized = false;
-        free(emitter.particles.sprites);
+        switch(emitter.particleType) {
+            case ParticleType::Pixel:
+                free(emitter.particles.pixels);
+            break;
+            case ParticleType::Sprite:
+                free(emitter.particles.sprites);
+            break;
+        }
         return;
     }
 
